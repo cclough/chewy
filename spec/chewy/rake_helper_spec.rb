@@ -429,6 +429,33 @@ Total: \\d+s\\Z
 Total: \\d+s\\Z
       OUTPUT
     end
+
+    it 'executes asynchronously' do
+      output = StringIO.new
+      expect(Chewy.client).to receive(:delete_by_query).with(
+        {
+          body: {query: {match_all: {}}},
+          index: ['chewy_journal'],
+          refresh: false,
+          requests_per_second: 10.0,
+          scroll_size: 200,
+          wait_for_completion: false
+        }
+      ).and_call_original
+      described_class.journal_clean(
+        output: output,
+        delete_by_query_options: {
+          wait_for_completion: false,
+          requests_per_second: 10.0,
+          scroll_size: 200
+        }
+      )
+
+      expect(output.string).to match(Regexp.new(<<-OUTPUT, Regexp::MULTILINE))
+\\ATask to cleanup the journal has been created, [^\\n]*
+Total: \\d+s\\Z
+      OUTPUT
+    end
   end
 
   describe '.reindex' do

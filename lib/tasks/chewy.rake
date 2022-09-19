@@ -94,7 +94,14 @@ namespace :chewy do
 
     desc 'Removes journal records created before the specified timestamp for the specified indexes/types or all of them'
     task clean: :environment do |_task, args|
-      Chewy::RakeHelper.journal_clean(**parse_journal_args(args.extras))
+      journal_args = parse_journal_args(args.extras)
+      delete_options = Chewy::RakeHelper.parse_delete_by_query_options(ARGV)
+      Chewy::RakeHelper.journal_clean(
+        [
+          journal_args,
+          {delete_by_query_options: delete_options}
+        ].reduce({}, :merge)
+      )
     end
   end
 end

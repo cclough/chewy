@@ -1144,6 +1144,17 @@ rake chewy:journal:apply["$(date -v-1H -u +%FT%TZ)"] # apply journaled changes f
 rake chewy:journal:apply["$(date -v-1H -u +%FT%TZ)",users] # apply journaled changes for the past hour on UsersIndex only
 ```
 
+For the cases when journal has grown up to enormous size, classical way of deletion is not quite possible. Fortunately chewy internally uses internally uses [delete-by-query](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/docs-delete-by-query.html#docs-delete-by-query-task-api) ES function which support async execution with batching and [throttling](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-delete-by-query.html#docs-delete-by-query-throttle).
+The full list of available options are listed below:
+* `wait_for_completion` - boolean, options controls async execution, `false` - `async`, `true` - `sync`. When set to `false` Elasticsearch performs some preflight checks, launches the request, and returns a task you can use to cancel or get the status of the task
+* `requests_per_second` - float, The throttle for this request in sub-requests per second
+* `scroll_size` - integer, Size of the scroll request that powers the operation
+
+
+```bash
+rake chewy:journal:clean -- --wait_for_completion=false --requests_per_second=10 --scroll_size=5000
+```
+
 ### RSpec integration
 
 Just add `require 'chewy/rspec'` to your spec_helper.rb and you will get additional features:

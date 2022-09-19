@@ -162,7 +162,7 @@ module Chewy
 
         subscribed_task_stats(output) do
           output.puts "Applying journal entries created after #{time}"
-          count = Chewy::Journal.new(indexes_from(only: only, except: except)).apply(time)
+          count = Chewy::Journal.new(journal_indexes_from(only: only, except: except)).apply(time)
           output.puts 'No journal entries were created after the specified time' if count.zero?
         end
       end
@@ -181,12 +181,16 @@ module Chewy
       # @param except [Array<Chewy::Index, String>, Chewy::Index, String] indexes to exclude from processing
       # @param output [IO] output io for logging
       # @return [Array<Chewy::Index>] indexes that were actually updated
-      def journal_clean(time: nil, only: nil, except: nil, output: $stdout)
+      def journal_clean(time: nil, only: nil, except: nil, delete_by_query_options: {}, output: $stdout)
         subscribed_task_stats(output) do
           output.puts "Cleaning journal entries created before #{time}" if time
-          response = Chewy::Journal.new(indexes_from(only: only, except: except)).clean(time)
-          count = response['deleted'] || response['_indices']['_all']['deleted']
-          output.puts "Cleaned up #{count} journal entries"
+          response = Chewy::Journal.new(journal_indexes_from(only: only, except: except)).clean(time, delete_by_query_options: delete_by_query_options)
+          if response.key?('task')
+            output.puts "Task to cleanup the journal has been created, #{response['task']}"
+          else
+            count = response['deleted'] || response['_indices']['_all']['deleted']
+            output.puts "Cleaned up #{count} journal entries"
+          end
         end
       end
 
@@ -228,6 +232,25 @@ module Chewy
         end
       end
 
+      # Parses options that are required to run journal cleanup asynchronously
+      # @see https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-delete-by-query.html
+      #
+      # @example
+      #   Chewy::RakeHelper.parse_delete_by_query_options(["chewy:journal:clean", "--", "--wait_for_completion=false", "--requests_per_second=10", "--scroll_size=5000"])
+      #
+      def parse_delete_by_query_options(args)
+        str_to_bool = ->(str) { {'true' => true, 'false' => false}.fetch(str) { raise('unknown value for boolean is provided') } }
+        options = {}
+        opts = OptionParser.new
+        opts.on('-w', '--wait_for_completion=ARG', String) { |val| options[:wait_for_completion] = str_to_bool.call(val) }
+        opts.on('-r', '--requests_per_second=ARG', Float) { |rps| options[:requests_per_second] = rps }
+        opts.on('-r', '--scroll_size=ARG', Integer) { |ss| options[:scroll_size] = ss }
+
+        ordered_args = opts.order(args) {} # rubocop:disable Lint/EmptyBlock
+        opts.parse(ordered_args)
+        options
+      end
+
       def normalize_indexes(*identifiers)
         identifiers.flatten(1).map { |identifier| normalize_index(identifier) }
       end
@@ -247,6 +270,12 @@ module Chewy
       end
 
     private
+
+      def journal_indexes_from(only: nil, except: nil)
+        return if Array.wrap(only).empty? && Array.wrap(except).empty?
+
+        indexes_from(only: only, except: except)
+      end
 
       def indexes_from(only: nil, except: nil)
         indexes = if only.present?
