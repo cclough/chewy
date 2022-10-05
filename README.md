@@ -77,7 +77,7 @@ Chewy provides functionality for Elasticsearch index handling, documents import 
 Create `config/initializers/chewy.rb` with this line:
 
 ```ruby
-Chewy.settings = {host: 'localhost:9250'}
+Chewy.settings = {host: 'localhost:9200'}
 ```
 
 And run `rails g chewy:install` to generate `chewy.yml`:
